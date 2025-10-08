@@ -1,0 +1,6 @@
+{
+  "background": { "color": "#FFFFFF" },
+  "cards": [
+    { "id": "old1", "type": "menucard", "x": 0, "y": 0, "w": 50, "h": 30, "title": "Legacy", "body": "Needs migration", "font": "Poppins" }
+  ]
+}

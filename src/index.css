@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+body {
+  @apply bg-gray-100 font-sans;
+}
+
+/* ─ Export helpers ─ */
+.exporting .no-export { display: none !important; }
+
+/* Editor handles */
+.editor-handle { background: #111; opacity: 0.6; border-radius: 3px; }
+.editor-handle--rotate { border-radius: 9999px; width: 16px; height: 16px; background: #111; opacity: 0.6; }
+
+/* Built-in faces kept for fallback */
+@font-face {
+  font-family: "BernierDistressed";
+  src: url("/fonts/BERNIERDistressed-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Alien-Encounters";
+  src: url("/fonts/Alien-Encounters-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}

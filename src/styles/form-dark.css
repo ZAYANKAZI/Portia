@@ -1,0 +1,157 @@
+/* File: src/styles/form-dark.css — REPLACE ENTIRE FILE */
+
+/* Tokens */
+.ui-dark{
+  --surface:#181a1f;
+  --surface-2:#20242c;
+  --border:#2d323a;
+  --text:#e8eaed;
+  --text-muted:#b8bfc7;
+  --focus:#3b82f6;
+  --ring:#60a5fa55;
+}
+
+/* Top-level dark cards */
+.ui-dark .ui-panel{
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px;
+}
+.ui-dark .ui-panel + .ui-panel{ margin-top:12px; }
+
+/* Collapsible card wrapper */
+.ui-dark details.ui-panel{ padding:0; overflow:hidden; }
+.ui-dark summary.panel-summary{
+  list-style:none; display:flex; align-items:center; gap:8px;
+  padding:10px 12px; background:var(--surface-2);
+  border-bottom:1px solid var(--border); color:var(--text);
+  cursor:pointer; user-select:none;
+}
+.ui-dark summary.panel-summary::-webkit-details-marker{ display:none; }
+.ui-dark .panel-body{ padding:12px; color:var(--text); }
+
+/* Nested <details> sections (Pizza/Meal) */
+.ui-dark .panel-body details:not(.ui-panel){
+  background:var(--surface)!important; border:1px solid var(--border)!important;
+  border-radius:8px; margin-top:8px; overflow:hidden;
+}
+.ui-dark .panel-body details:not(.ui-panel) > summary{
+  list-style:none; padding:10px 12px; background:var(--surface-2)!important;
+  border-bottom:1px solid var(--border)!important; color:var(--text)!important;
+}
+.ui-dark .panel-body details:not(.ui-panel) > summary::-webkit-details-marker{ display:none; }
+.ui-dark .panel-body details:not(.ui-panel) > *:not(summary){ padding:10px 12px; color:var(--text); }
+
+/* Nested custom sections (Menu Card div.border.rounded …) */
+.ui-dark .panel-body .border.rounded,
+.ui-dark .panel-body .rounded.border,
+.ui-dark .panel-body .rounded-lg.border,
+.ui-dark .panel-body .rounded-md.border{
+  background:var(--surface)!important; border:1px solid var(--border)!important;
+  border-radius:8px; margin-top:8px; overflow:hidden;
+}
+.ui-dark .panel-body .border.rounded > :first-child,
+.ui-dark .panel-body .rounded.border > :first-child,
+.ui-dark .panel-body .rounded-lg.border > :first-child,
+.ui-dark .panel-body .rounded-md.border > :first-child{
+  display:flex; align-items:center; gap:8px; padding:10px 12px;
+  background:var(--surface-2)!important; border-bottom:1px solid var(--border)!important;
+  color:var(--text)!important;
+}
+.ui-dark .panel-body .border.rounded > :not(:first-child),
+.ui-dark .panel-body .rounded.border > :not(:first-child),
+.ui-dark .panel-body .rounded-lg.border > :not(:first-child),
+.ui-dark .panel-body .rounded-md.border > :not(:first-child){
+  padding:10px 12px; color:var(--text);
+}
+
+/* Fallback for any container that has a <summary> */
+@supports selector(:has(*)){
+  .ui-dark .panel-body *:has(> summary){
+    background:var(--surface)!important; border:1px solid var(--border)!important;
+    border-radius:8px; margin-top:8px; overflow:hidden;
+  }
+  .ui-dark .panel-body *:has(> summary) > summary{
+    list-style:none; padding:10px 12px; background:var(--surface-2)!important;
+    border-bottom:1px solid var(--border)!important; color:var(--text)!important;
+  }
+  .ui-dark .panel-body *:has(> summary) > *:not(summary){ padding:10px 12px; color:var(--text); }
+}
+
+/* Typography */
+.ui-dark label, .ui-dark .panel-title, .ui-dark summary, .ui-dark .text-label{ color:var(--text)!important; }
+.ui-dark small, .ui-dark .muted{ color:var(--text-muted)!important; }
+
+/* ——— CRITICAL: field legibility ——— */
+/* Force readable fields inside the form-safe + ui-dark wrapper */
+.ui-dark.form-safe input:not([type="range"]):not([type="color"]),
+.ui-dark.form-safe select,
+.ui-dark.form-safe textarea,
+.ui-dark .form-safe input:not([type="range"]):not([type="color"]),
+.ui-dark .form-safe select,
+.ui-dark .form-safe textarea{
+  background:#ffffff !important;
+  color:#111 !important;
+  -webkit-text-fill-color:#111 !important;
+  border:1px solid #d0d0d0 !important;
+  border-radius:6px !important;
+  appearance:auto !important;
+}
+.ui-dark.form-safe input::placeholder,
+.ui-dark.form-safe textarea::placeholder,
+.ui-dark .form-safe input::placeholder,
+.ui-dark .form-safe textarea::placeholder{ color:#6b7280 !important; opacity:1; }
+
+/* Options in dropdowns */
+.ui-dark.form-safe select option,
+.ui-dark.form-safe select optgroup,
+.ui-dark .form-safe select option,
+.ui-dark .form-safe select optgroup{
+  color:#111 !important; background:#fff !important;
+}
+
+/* Focus ring */
+.ui-dark.form-safe :is(input:not([type="range"]):not([type="color"]), select, textarea):focus,
+.ui-dark .form-safe :is(input:not([type="range"]):not([type="color"]), select, textarea):focus{
+  outline:none!important; border-color:var(--focus)!important; box-shadow:0 0 0 3px var(--ring)!important;
+}
+
+/* Disabled fields: still readable */
+.ui-dark.form-safe :is(input,select,textarea):disabled,
+.ui-dark .form-safe :is(input,select,textarea):disabled{
+  background:#2a2f36!important; color:#c9d1d9!important; -webkit-text-fill-color:#c9d1d9!important; border-color:#3a414a!important;
+}
+
+/* Keep color & range native */
+.ui-dark .panel-body input[type="color"]{ padding:0; background:transparent; border:none; }
+.ui-dark .panel-body input[type="range"]{ accent-color:var(--focus); }
+
+/* File rows (top-level + generic) */
+.ui-dark .file-row{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; min-width:0; }
+.ui-dark .file-row label{ white-space:nowrap; }
+.ui-dark .file-row .file-wrap{ flex:1 1 140px; min-width:0; overflow:hidden; }
+.ui-dark .file-row .file-wrap input[type="file"]{ width:100%; }
+.ui-dark .file-row .clear-btn{ flex:0 0 auto; margin-left:auto; white-space:nowrap; }
+@supports selector(:has(*)){
+  .ui-dark .panel-body :is(div,section,fieldset,form):has(> input[type="file"]){
+    display:flex; align-items:center; gap:8px; flex-wrap:nowrap; min-width:0;
+  }
+  .ui-dark .panel-body :is(div,section,fieldset,form):has(> input[type="file"]) > input[type="file"]{
+    flex:1 1 140px; min-width:0;
+  }
+  .ui-dark .panel-body :is(div,section,fieldset,form):has(> input[type="file"]) > button{
+    margin-left:auto; white-space:nowrap;
+  }
+}
+
+/* Borders */
+.ui-dark .border{ border-color:var(--border)!important; }
+
+/* Sidebar scrollbar cosmetics */
+.form-scroll{ scrollbar-gutter:stable both-edges; }
+.form-scroll::-webkit-scrollbar{ width:10px; }
+.form-scroll::-webkit-scrollbar-track{ background:#1f1f1f; }
+.form-scroll::-webkit-scrollbar-thumb{ background:#3a3a3a; border-radius:8px; }
+.form-scroll::-webkit-scrollbar-thumb:hover{ background:#4a4a4a; }

@@ -1,0 +1,40 @@
+{
+  "families": [
+    {
+      "family": "NexaRustSans-Trial-BlackShadow1",
+      "variants": [
+        {
+          "style": "normal",
+          "weight": 400,
+          "sources": [
+            "/fonts/NexaRustSans-Trial-BlackShadow1/NexaRustSans-Trial-BlackShadow1.ttf"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "UTLaurelle",
+      "variants": [
+        {
+          "style": "normal",
+          "weight": 400,
+          "sources": [
+            "/fonts/UTLaurelle/UTLaurelle-Regular.ttf"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "big_noodle_titling",
+      "variants": [
+        {
+          "style": "normal",
+          "weight": 400,
+          "sources": [
+            "/fonts/big_noodle_titling/big_noodle_titling.ttf"
+          ]
+        }
+      ]
+    }
+  ]
+}

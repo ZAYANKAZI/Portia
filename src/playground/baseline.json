@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "background": { "type": "one", "colors": ["#FFFFFF"], "direction": "to right", "ratio": 50 },
+  "cards": [
+    { "id": "c1", "type": "menucard", "x": 5, "y": 5, "w": 45, "h": 40, "title": "Burgers", "body": "Classic / Cheese / Double", "price": "", "font": "Poppins" },
+    { "id": "c2", "type": "mealcard", "x": 50, "y": 5, "w": 45, "h": 40, "title": "Meals", "body": "Fish & Chips / Chicken", "price": "", "font": "Poppins" }
+  ]
+}
