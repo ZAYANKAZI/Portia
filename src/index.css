@@ -1,22 +1,24 @@
+/* File: src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "prismjs/themes/prism-okaidia.css";
 
+@import "./components/backgrounds/Prism.css";
 
-
+/* Dark body so Prism glow isn’t washed out */
 body {
-  @apply bg-gray-100 font-sans;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background-color: #09090b;
 }
 
-/* ─ Export helpers ─ */
+/* Export helpers */
 .exporting .no-export { display: none !important; }
 
 /* Editor handles */
 .editor-handle { background: #111; opacity: 0.6; border-radius: 3px; }
 .editor-handle--rotate { border-radius: 9999px; width: 16px; height: 16px; background: #111; opacity: 0.6; }
 
-/* Built-in faces kept for fallback */
+/* Built-in faces */
 @font-face {
   font-family: "BernierDistressed";
   src: url("/fonts/BERNIERDistressed-Regular.otf") format("opentype");

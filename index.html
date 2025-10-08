@@ -1,10 +1,112 @@
+<!-- File: public/index.html (FULL PATCH with resilient Prism loader) -->
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <title>Portia</title>
+    <link rel="icon" href="/favicon.ico" />
+
+    <script>
+      (function () {
+        const THEMES = [
+          "https://unpkg.com/prismjs/themes/prism-okaidia.min.css",
+          "https://cdn.jsdelivr.net/npm/prismjs/themes/prism-okaidia.min.css",
+          "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css"
+        ];
+        const CORE = [
+          "https://unpkg.com/prismjs/prism.min.js",
+          "https://cdn.jsdelivr.net/npm/prismjs/prism.min.js",
+          "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"
+        ];
+        const LANGS = [
+          [
+            "https://unpkg.com/prismjs/components/prism-javascript.min.js",
+            "https://cdn.jsdelivr.net/npm/prismjs/components/prism-javascript.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"
+          ],
+          [
+            "https://unpkg.com/prismjs/components/prism-jsx.min.js",
+            "https://cdn.jsdelivr.net/npm/prismjs/components/prism-jsx.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-jsx.min.js"
+          ],
+          [
+            "https://unpkg.com/prismjs/components/prism-json.min.js",
+            "https://cdn.jsdelivr.net/npm/prismjs/components/prism-json.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"
+          ],
+        ];
+
+        function loadStyleFromAny(hrefs) {
+          return new Promise((resolve, reject) => {
+            let i = 0;
+            const tryNext = () => {
+              if (i >= hrefs.length) return reject(new Error("Prism theme failed"));
+              const href = hrefs[i++];
+              const l = document.createElement("link");
+              l.rel = "stylesheet";
+              l.href = href;
+              l.onload = () => resolve(href);
+              l.onerror = () => tryNext();
+              document.head.appendChild(l);
+            };
+            tryNext();
+          });
+        }
+
+        function loadScriptFromAny(srcs) {
+          return new Promise((resolve, reject) => {
+            let i = 0;
+            const tryNext = () => {
+              if (i >= srcs.length) return reject(new Error("Prism script failed"));
+              const src = srcs[i++];
+              const s = document.createElement("script");
+              s.src = src;
+              s.async = false; // preserve order
+              s.onload = () => resolve(src);
+              s.onerror = () => tryNext();
+              document.head.appendChild(s);
+            };
+            tryNext();
+          });
+        }
+
+        async function bootPrism() {
+          try {
+            await loadStyleFromAny(THEMES);
+            await loadScriptFromAny(CORE);
+            for (const group of LANGS) {
+              await loadScriptFromAny(group);
+            }
+            if (window.Prism && Prism.highlightAll) Prism.highlightAll();
+
+            // Re-highlight on SPA navigations
+            ["pushState", "replaceState"].forEach((m) => {
+              const orig = history[m];
+              if (typeof orig === "function") {
+                history[m] = function () {
+                  const ret = orig.apply(this, arguments);
+                  try { window.dispatchEvent(new Event(m.toLowerCase())); } catch {}
+                  return ret;
+                };
+              }
+            });
+            const rerun = () => setTimeout(() => window.Prism && Prism.highlightAll(), 0);
+            window.addEventListener("pushstate", rerun);
+            window.addEventListener("replacestate", rerun);
+            window.addEventListener("popstate", rerun);
+          } catch (e) {
+            console.error("Prism boot failed:", e);
+          }
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", bootPrism, { once: true });
+        } else {
+          bootPrism();
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

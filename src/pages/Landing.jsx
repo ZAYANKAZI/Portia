@@ -1,3 +1,4 @@
+// File: src/pages/Landing.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -87,10 +88,9 @@ export default function Landing() {
     }
   };
 
-  // --- Fonts: 2-step flow ---
   const connectFolder = async () => {
     try {
-      await fonts.connectProjectFolder(); // must be called in this click
+      await fonts.connectProjectFolder();
       setFolderConnected(true);
       alert('Project folder connected. You can now add fonts.');
     } catch (err) {
@@ -107,7 +107,7 @@ export default function Landing() {
   const onAddFontFiles = async (e) => {
     const files = e.target.files;
     try {
-      await fonts.addFonts(files); // no directory picker here
+      await fonts.addFonts(files);
       alert('Font(s) added to public/fonts. They are now available in pickers.');
     } catch (err) {
       alert(`Add Font failed: ${err?.message || String(err)}`);
@@ -128,111 +128,143 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-[70vh] grid place-items-center px-4">
-      <div className="relative z-10 w-full max-w-5xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white">Screen Promotion</h1>
-          <p className="text-white/90 mt-2">Start a new project or open an existing one.</p>
-        </div>
+    <>
+      {/* Fixed ReactBits Prism background layer */}
+      <div
+        className="prism-container no-export"
+        style={{
+          background: `
+            radial-gradient(60% 80% at 15% 10%, rgba(255,110,199,0.35) 0%, rgba(255,110,199,0) 60%),
+            radial-gradient(55% 75% at 85% 5%,  rgba(111,255,233,0.30) 0%, rgba(111,255,233,0) 60%),
+            radial-gradient(60% 60% at 0% 85%,  rgba(255,209,102,0.32) 0%, rgba(255,209,102,0) 60%),
+            radial-gradient(52% 60% at 100% 100%, rgba(167,139,250,0.34) 0%, rgba(167,139,250,0) 60%),
+            conic-gradient(from 210deg at 50% 50%,
+              rgba(255,110,199,0.16),
+              rgba(111,255,233,0.16),
+              rgba(167,139,250,0.16),
+              rgba(255,209,102,0.16),
+              rgba(255,110,199,0.16))
+          `,
+          filter: 'blur(42px) saturate(115%)',
+          opacity: 0.80,
+          backgroundColor: '#09090b',
+        }}
+      />
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <button onClick={() => setPickerOpen(true)} className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center hover:bg-white/15 transition text-white">
-            <div className="text-lg font-semibold">Open Project</div>
-            <div className="text-sm text-white/80 mt-1">Choose from saved projects.</div>
-          </button>
+      {/* Content above background */}
+      <div className="relative z-10 min-h-[70vh] grid place-items-center px-4">
+        <div className="relative z-10 w-full max-w-5xl">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-white">Screen Promotion</h1>
+            <p className="text-white/90 mt-2">Start a new project or open an existing one.</p>
+          </div>
 
-          <button onClick={() => setNewOpen(true)} className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center hover:bg-white/15 transition text-white">
-            <div className="text-lg font-semibold">New Project</div>
-            <div className="text-sm text-white/80 mt-1">Create blank or duplicate.</div>
-          </button>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <button onClick={() => setPickerOpen(true)} className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center hover:bg-white/15 transition text-white">
+              <div className="text-lg font-semibold">Open Project</div>
+              <div className="text-sm text-white/80 mt-1">Choose from saved projects.</div>
+            </button>
 
-          <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center text-white">
-            <div className="text-lg font-semibold mb-2">Import / Export</div>
-            <div className="flex gap-2 justify-center">
-              <button onClick={onImportClick} className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20">Import JSON</button>
-              <button onClick={() => { setExportPick(list.find((x) => x.id && x.id !== '__autosave__')?.id || ''); setExportOpen(true); }} className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20">Export JSON</button>
-            </div>
-            <input ref={fileInputRef} className="hidden" type="file" accept="application/json,.json" onChange={onImportJson} />
+            <button onClick={() => setNewOpen(true)} className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center hover:bg-white/15 transition text-white">
+              <div className="text-lg font-semibold">New Project</div>
+              <div className="text-sm text-white/80 mt-1">Create blank or duplicate.</div>
+            </button>
 
-            {/* Fonts */}
-            <div className="mt-4">
-              <div className="text-lg font-semibold mb-2">Fonts</div>
+            <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-md p-6 text-center text-white">
+              <div className="text-lg font-semibold mb-2">Import / Export</div>
               <div className="flex gap-2 justify-center">
-                <button onClick={connectFolder} className="px-3 py-1.5 rounded border border-emerald-400/60 bg-emerald-500/20 hover:bg-emerald-500/30">
-                  {folderConnected ? 'Reconnect Folder' : 'Connect Project Folder'}
-                </button>
-                <button onClick={onAddFontClick} className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20">
-                  Add Font
+                <button onClick={onImportClick} className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20">Import JSON</button>
+                <button
+                  onClick={() => {
+                    setExportPick(list.find((x) => x.id && x.id !== '__autosave__')?.id || '');
+                    setExportOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20"
+                >
+                  Export JSON
                 </button>
               </div>
-              <input ref={fontInputRef} className="hidden" type="file" accept=".ttf,.otf,.woff,.woff2" multiple onChange={onAddFontFiles} />
-              <div className="text-xs text-white/70 mt-2">
-                {fonts.hasProjectRoot() ? 'Folder connected ✓' : 'Folder not connected'}
+              <input ref={fileInputRef} className="hidden" type="file" accept="application/json,.json" onChange={onImportJson} />
+
+              <div className="mt-4">
+                <div className="text-lg font-semibold mb-2">Fonts</div>
+                <div className="flex gap-2 justify-center">
+                  <button onClick={connectFolder} className="px-3 py-1.5 rounded border border-emerald-400/60 bg-emerald-500/20 hover:bg-emerald-500/30">
+                    {folderConnected ? 'Reconnect Folder' : 'Connect Project Folder'}
+                  </button>
+                  <button onClick={onAddFontClick} className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20">
+                    Add Font
+                  </button>
+                </div>
+                <input ref={fontInputRef} className="hidden" type="file" accept=".ttf,.otf,.woff,.woff2" multiple onChange={onAddFontFiles} />
+                <div className="text-xs text-white/70 mt-2">
+                  {fonts.hasProjectRoot() ? 'Folder connected ✓' : 'Folder not connected'}
+                </div>
               </div>
             </div>
           </div>
+
+          <div className="mt-6 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-md overflow-hidden">
+            {list.filter((x) => x.id !== '__autosave__').length === 0 ? (
+              <div className="text-center text-white text-sm py-6">No projects found on this device.</div>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {list.filter((x) => x.id !== '__autosave__').map((p) => (
+                  <li key={p.id} className="py-3 px-4 flex items-center text-white">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="ml-2 text-xs text-white/70">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : ''}</span>
+                    <button className="ml-auto px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => openEditor(p.id)}>Open</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-md overflow-hidden">
-          {list.filter((x) => x.id !== '__autosave__').length === 0 ? (
-            <div className="text-center text-white text-sm py-6">No projects found on this device.</div>
-          ) : (
-            <ul className="divide-y divide-white/10">
-              {list.filter((x) => x.id !== '__autosave__').map((p) => (
-                <li key={p.id} className="py-3 px-4 flex items-center text-white">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="ml-2 text-xs text-white/70">{p.updatedAt ? new Date(p.updatedAt).toLocaleString() : ''}</span>
-                  <button className="ml-auto px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => openEditor(p.id)}>Open</button>
+        {pickerOpen && (
+          <Modal onClose={() => setPickerOpen(false)} maxWidth="max-w-xl" title="Open Project">
+            <ul className="rounded-xl overflow-hidden border border-white/20">
+              {list.map((p) => (
+                <li key={p.id} className="border-b last:border-b-0 border-white/10">
+                  <button className="w-full py-3 px-4 text-center hover:bg-white/10 transition" onClick={() => { setPickerOpen(false); openEditor(p.id); }}>
+                    {p.name}
+                  </button>
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-      </div>
+          </Modal>
+        )}
 
-      {pickerOpen && (
-        <Modal onClose={() => setPickerOpen(false)} maxWidth="max-w-xl" title="Open Project">
-          <ul className="rounded-xl overflow-hidden border border-white/20">
-            {list.map((p) => (
-              <li key={p.id} className="border-b last:border-b-0 border-white/10">
-                <button className="w-full py-3 px-4 text-center hover:bg-white/10 transition" onClick={() => { setPickerOpen(false); openEditor(p.id); }}>
-                  {p.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Modal>
-      )}
+        {newOpen && (
+          <Modal onClose={() => setNewOpen(false)} title="Create / Duplicate Project">
+            <div className="grid grid-cols-12 gap-3 items-center">
+              <label className="col-span-3 text-sm">Project Name</label>
+              <input className="col-span-9 rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New project" />
+              <label className="col-span-3 text-sm">Start From</label>
+              <select className="col-span-9 rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={startFrom} onChange={(e) => setStartFrom(e.target.value)}>
+                <option value="blank">Blank</option>
+                {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20" onClick={() => setNewOpen(false)}>Cancel</button>
+              <button className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={createNew}>Create</button>
+            </div>
+          </Modal>
+        )}
 
-      {newOpen && (
-        <Modal onClose={() => setNewOpen(false)} title="Create / Duplicate Project">
-          <div className="grid grid-cols-12 gap-3 items-center">
-            <label className="col-span-3 text-sm">Project Name</label>
-            <input className="col-span-9 rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New project" />
-            <label className="col-span-3 text-sm">Start From</label>
-            <select className="col-span-9 rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={startFrom} onChange={(e) => setStartFrom(e.target.value)}>
-              <option value="blank">Blank</option>
-              {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        {exportOpen && (
+          <Modal onClose={() => setExportOpen(false)} title="Export project as JSON">
+            <select className="w-full rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={exportPick} onChange={(e) => setExportPick(e.target.value)}>
+              {list.filter((x) => x.id !== '__autosave__').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
-          </div>
-          <div className="mt-5 flex justify-end gap-2">
-            <button className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20" onClick={() => setNewOpen(false)}>Cancel</button>
-            <button className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={createNew}>Create</button>
-          </div>
-        </Modal>
-      )}
-
-      {exportOpen && (
-        <Modal onClose={() => setExportOpen(false)} title="Export project as JSON">
-          <select className="w-full rounded-md px-3 py-2 bg-white/90 text-gray-900 border border-white/40" value={exportPick} onChange={(e) => setExportPick(e.target.value)}>
-            {list.filter((x) => x.id !== '__autosave__').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <div className="mt-5 flex justify-end gap-2">
-            <button className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20" onClick={() => setExportOpen(false)}>Cancel</button>
-            <button className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={doExport} disabled={!exportPick}>Export JSON</button>
-          </div>
-        </Modal>
-      )}
-    </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="px-3 py-1.5 rounded border border-white/30 bg-white/10 hover:bg-white/20" onClick={() => setExportOpen(false)}>Cancel</button>
+              <button className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white" onClick={doExport} disabled={!exportPick}>Export JSON</button>
+            </div>
+          </Modal>
+        )}
+      </div>
+    </>
   );
 }
