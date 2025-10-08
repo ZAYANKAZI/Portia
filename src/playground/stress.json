@@ -1,7 +1,8 @@
+
 {
   "schemaVersion": 2,
   "background": { "type": "two", "colors": ["#0F172A", "#F8FAFC"], "direction": "to right", "ratio": 62 },
   "cards": [
-    { "id": "c3", "type": "pizzacard", "x": 4, "y": 6, "w": 92, "h": 40, "title": "🍕 Super Long Names — Margherita Extra Extra Large", "body": "RTЛ مثال العربية 中文混排 — test hyphenation and wrapping behaviors across languages", "price": "€12.99", "font": "Poppins" }
+    { "id": "c3", "type": "pizzacard", "x": 4, "y": 6, "w": 92, "h": 40, "title": "🍕 Super Long Names — Margherita Extra Extra Large", "body": "RTЛ مثال العربية 中文 — wrap test across scripts", "price": "€12.99", "font": "Poppins" }
   ]
 }

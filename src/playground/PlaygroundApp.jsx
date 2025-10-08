@@ -1,4 +1,4 @@
-// File: src/playground/PlaygroundApp.jsx  (PATCHED IMPORT PATHS)
+// File: src/playground/PlaygroundApp.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import LandingPicker from "./LandingPicker.jsx";
 import DebugHUD from "./DebugHUD.jsx";
@@ -8,14 +8,11 @@ import { makeSessionId } from "./useSessionId.js";
 import { captureScreenshot, downloadDataUrl } from "./snapshots.js";
 import { FLAGS } from "./featureFlags.js";
 
-// ---- FIXED PATHS (match your repo) ----
-import FormPanel from "../components/FormPanel.jsx";               // ← was ../FormPanel.jsx
-import PreviewCanvas from "../components/PreviewCanvas.jsx";       // adjust if different
-import * as projectStore from "../utils/projectStore.js";          // adjust if your store path differs
-import { registry } from "../components/templates/registry.js";    // adjust if your registry path differs
-// --------------------------------------
+import FormPanel from "../components/FormPanel.jsx";
+import PreviewCanvas from "../components/PreviewCanvas.jsx";
+import * as projectStore from "../utils/projectStore.js";
+import { registry } from "../components/templates/registry.js";
 
-// Fixtures (ensure they exist under /playground/fixtures)
 import baseline from "./baseline.json";
 import stress from "./stress.json";
 import legacy from "./legacy.json";
@@ -31,16 +28,13 @@ export default function PlaygroundApp() {
   const [metrics, setMetrics] = useState({ fps: 0, zoom: 1, pan: { x: 0, y: 0 } });
 
   useEffect(() => {
-    let frames = 0;
-    let last = performance.now();
-    let raf;
+    let frames = 0, last = performance.now(), raf;
     const tick = () => {
       frames++;
       const now = performance.now();
       if (now - last >= 1000) {
         setMetrics((m) => ({ ...m, fps: frames }));
-        frames = 0;
-        last = now;
+        frames = 0; last = now;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -70,9 +64,7 @@ export default function PlaygroundApp() {
       });
       return result;
     };
-    return () => {
-      projectStore.setState = origSetState;
-    };
+    return () => { projectStore.setState = origSetState; };
   }, [logger]);
 
   const onOpen = ({ source, project, name }) => {
@@ -105,7 +97,7 @@ export default function PlaygroundApp() {
   const onExport = async () => {
     try {
       logger.push(EVENT.EXPORT_START, {});
-      await onScreenshot(); // replace with real export if available
+      await onScreenshot(); // replace with real export when available
       logger.push(EVENT.EXPORT_SUCCESS, {});
     } catch (e) {
       logger.push(EVENT.EXPORT_FAIL, { message: String(e) });
@@ -180,7 +172,5 @@ function hashJSON(obj) {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return (h >>> 0).toString(16);
-  } catch {
-    return "0";
-  }
+  } catch { return "0"; }
 }
