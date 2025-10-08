@@ -9,7 +9,6 @@ import { makeSessionId } from "../playground/useSessionId.js";
 import { captureScreenshot, downloadDataUrl } from "../playground/snapshots.js";
 import * as RegistryModule from "../components/templates/registry.js";
 
-// Robust registry (default/named/aliases)
 const REGISTRY =
   RegistryModule.registry ||
   RegistryModule.default ||
@@ -18,25 +17,56 @@ const REGISTRY =
   RegistryModule;
 
 export default function PlaygroundRoute() {
-  // Block persistence (no writes) only while on playground
+  // --- Sandbox: block persistence and unload guards while on /playground
   useEffect(() => {
+    window.__PG_MODE__ = true;
     const ls = window.localStorage;
     const orig = {
       setItem: ls.setItem.bind(ls),
       removeItem: ls.removeItem.bind(ls),
       clear: ls.clear.bind(ls),
+      onbeforeunload: window.onbeforeunload,
     };
     ls.setItem = () => {};
     ls.removeItem = () => {};
     ls.clear = () => {};
+    window.onbeforeunload = null;
+
+    // Intercept ANY "Exit" click from the app shell (capture phase) and hard-redirect
+    const exitCapture = (e) => {
+      const el = e.target.closest?.("button, a, [role='button']") || e.target;
+      if (!el) return;
+      const label = (
+        el.getAttribute?.("aria-label") ||
+        el.getAttribute?.("title") ||
+        el.textContent ||
+        ""
+      ).toLowerCase().trim();
+      // heuristics: match common variants
+      const looksLikeExit =
+        /\bexit\b|leave editor|close|back to home|go home/.test(label);
+      if (looksLikeExit) {
+        e.preventDefault();
+        e.stopImmediatePropagation?.();
+        e.stopPropagation();
+        try { window.onbeforeunload = null; } catch {}
+        // HARD redirect (bypasses React Router & any internal guards)
+        window.location.replace("/");
+      }
+    };
+    document.addEventListener("click", exitCapture, true);
+
     return () => {
+      document.removeEventListener("click", exitCapture, true);
       ls.setItem = orig.setItem;
       ls.removeItem = orig.removeItem;
       ls.clear = orig.clear;
+      window.onbeforeunload = orig.onbeforeunload ?? null;
+      delete window.__PG_MODE__;
     };
   }, []);
 
-  // Ensure visible blank project if nothing loaded
+  // Seed visible blank if nothing loaded
   useEffect(() => {
     const s = getStateSafe();
     if (!s || !s.background || !Array.isArray(s.cards)) {
@@ -72,7 +102,7 @@ export default function PlaygroundRoute() {
     }
   };
 
-  // Import
+  // Import flow (JSON → migrate → normalize → hydrate)
   const fileRef = useRef(null);
   const handleImport = async (file) => {
     if (!file) return;
@@ -91,7 +121,7 @@ export default function PlaygroundRoute() {
     }
   };
 
-  // Restart
+  // Toolbar actions
   const handleRestart = () => {
     const blank = {
       schemaVersion: 2,
@@ -100,25 +130,15 @@ export default function PlaygroundRoute() {
     };
     projectStore.hydrate?.(blank) ?? projectStore.load?.(blank);
   };
-
-  // **Force exit → landing** (bypass guards)
   const handleExit = () => {
-    try {
-      // neutralize common “unsaved changes” guards
-      window.onbeforeunload = null;
-      // mark as safe if your app checks flags
-      window.__PG_BYPASS_GUARDS__ = true;
-    } catch {}
-    // hard redirect (no SPA intercept)
+    // direct exit (also handled by capture listener)
+    window.onbeforeunload = null;
     window.location.replace("/");
   };
 
   return (
     <>
-      {/* Full app (Home: FormPanel + canvas + all features) */}
       <Home />
-
-      {/* Playground toolbar */}
       <Toolbar onExit={handleExit} onRestart={handleRestart} onPick={() => fileRef.current?.click()} />
       <input
         ref={fileRef}
@@ -128,7 +148,6 @@ export default function PlaygroundRoute() {
         onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
       />
 
-      {/* HUD */}
       <HudToggle open={hudOpen} onToggle={() => setHudOpen((v) => !v)} />
       {hudOpen && (
         <DebugHUD
@@ -143,7 +162,7 @@ export default function PlaygroundRoute() {
   );
 }
 
-/* ------------ helpers ------------ */
+/* ---------- helpers ---------- */
 function getStateSafe() {
   try {
     return projectStore.getState ? projectStore.getState() : projectStore.state;
@@ -152,7 +171,6 @@ function getStateSafe() {
   }
 }
 
-// Normalize legacy JSON; seed 1 default card if none resolved
 function normalizeProject(input, registry) {
   const out = { ...input };
   if (!out.schemaVersion || out.schemaVersion < 2) out.schemaVersion = 2;
@@ -160,17 +178,10 @@ function normalizeProject(input, registry) {
   // background
   if (!out.background) out.background = {};
   if (out.background.color && !out.background.type) {
-    out.background = {
-      type: "one",
-      colors: [out.background.color],
-      direction: "to right",
-      ratio: 50,
-    };
+    out.background = { type: "one", colors: [out.background.color], direction: "to right", ratio: 50 };
   }
   if (!out.background.type) out.background.type = "one";
-  if (!Array.isArray(out.background.colors)) {
-    out.background.colors = [out.background.colors || "#111111"];
-  }
+  if (!Array.isArray(out.background.colors)) out.background.colors = [out.background.colors || "#111111"];
   if (typeof out.background.direction !== "string") out.background.direction = "to right";
   if (typeof out.background.ratio !== "number") out.background.ratio = 50;
 
@@ -182,7 +193,7 @@ function normalizeProject(input, registry) {
     const raw = String(t || "").trim();
     const lc = raw.toLowerCase().replace(/\s+/g, "");
     const map = {
-      menucard: "menucard", menu: "menucard", "menu-card": "menucard", menucardcomponent: "menucard",
+      menucard: "menucard", menu: "menucard", "menu-card": "menucard",
       mealcard: "mealcard", meal: "mealcard", "meal-card": "mealcard",
       pizzacard: "pizzacard", pizza: "pizzacard", "pizza-card": "pizzacard",
     };
@@ -194,7 +205,7 @@ function normalizeProject(input, registry) {
   if (!cards.length && Array.isArray(out.sections)) {
     cards = out.sections.map((s, i) => ({
       id: s.id || `sec_${i + 1}`,
-      type: alias(s.type || "menucard"),
+      type: alias(s.type || firstKey),
       x: s.x ?? (i % 2 === 0 ? 5 : 52),
       y: s.y ?? (i < 2 ? 5 : 48),
       w: s.w ?? 43,
@@ -242,7 +253,7 @@ function clamp(v, min, max, dflt) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
 }
 
-/* ------------ UI bits ------------ */
+/* ---------- UI bits ---------- */
 function Toolbar({ onExit, onRestart, onPick }) {
   const [open, setOpen] = useState(true);
   return (

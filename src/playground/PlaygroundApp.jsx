@@ -1,246 +1,297 @@
-// File: src/playground/PlaygroundApp.jsx
-import React, { useMemo, useRef, useState, useEffect } from "react";
-import FormPanel from "../components/FormPanel.jsx";
-import PreviewCanvas from "../components/PreviewCanvas.jsx";
-import * as store from "../utils/projectStore.js";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Home from "../pages/Home.jsx";
+import * as projectStore from "../utils/projectStore.js";
+import DebugHUD from "../playground/DebugHUD.jsx";
+import { createLogger } from "../playground/logger.js";
+import { EVENT } from "../playground/types.js";
+import { makeSessionId } from "../playground/useSessionId.js";
+import { captureScreenshot, downloadDataUrl } from "../playground/snapshots.js";
 import * as RegistryModule from "../components/templates/registry.js";
 
-// Robust registry resolution (named/default/templates/cards)
-const registry =
+const REGISTRY =
   RegistryModule.registry ||
   RegistryModule.default ||
   RegistryModule.templates ||
   RegistryModule.cards ||
   RegistryModule;
 
-export default function PlaygroundApp() {
-  // UI
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [error, setError] = useState("");
-
-  // File picker
-  const fileRef = useRef(null);
-
-  // Sandbox: disable persistence side-effects
-  const sandboxStore = useMemo(() => {
-    const patched = { ...store };
-    patched.save = () => {};      // no-op
-    patched.persist = () => {};   // no-op
-    return patched;
-  }, []);
-
-  // Canvas sizing wrapper to avoid “blank” due to zero height
-  const canvasWrapRef = useRef(null);
-  const [wrapperSize, setWrapperSize] = useState({ w: 1280, h: 720 });
+export default function PlaygroundRoute() {
+  // Sandbox: disable localStorage writes & unsaved prompts in this route
   useEffect(() => {
-    const el = canvasWrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const cr = entry.contentRect;
-      // Give Preview a stable sized area; keep 16:9 if space allows
-      const maxW = Math.max(600, cr.width - 24);
-      const maxH = Math.max(400, cr.height - 24);
-      // Maintain 16:9 letterboxed fit
-      const targetW = Math.min(maxW, (maxH * 16) / 9);
-      const targetH = (targetW * 9) / 16;
-      setWrapperSize({ w: Math.floor(targetW), h: Math.floor(targetH) });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    const ls = window.localStorage;
+    const orig = {
+      setItem: ls.setItem.bind(ls),
+      removeItem: ls.removeItem.bind(ls),
+      clear: ls.clear.bind(ls),
+      onbeforeunload: window.onbeforeunload,
+    };
+    ls.setItem = () => {};
+    ls.removeItem = () => {};
+    ls.clear = () => {};
+    window.onbeforeunload = null;
+
+    // Catch any app "Exit" click before app handles it
+    const exitCapture = (e) => {
+      const el = e.target.closest?.("button, a, [role='button']") || e.target;
+      if (!el) return;
+      const label = (
+        el.getAttribute?.("aria-label") ||
+        el.getAttribute?.("title") ||
+        el.textContent ||
+        ""
+      ).toLowerCase().trim();
+      if (/\bexit\b|leave editor|back to home|go home|close/i.test(label)) {
+        e.preventDefault();
+        e.stopImmediatePropagation?.();
+        e.stopPropagation();
+        try { window.onbeforeunload = null; } catch {}
+        window.location.replace("/"); // hard redirect → Landing
+      }
+    };
+    document.addEventListener("click", exitCapture, true);
+
+    return () => {
+      document.removeEventListener("click", exitCapture, true);
+      ls.setItem = orig.setItem;
+      ls.removeItem = orig.removeItem;
+      ls.clear = orig.clear;
+      window.onbeforeunload = orig.onbeforeunload ?? null;
+    };
   }, []);
 
-  // Helpers
-  const getState = () =>
-    (sandboxStore.getState && sandboxStore.getState()) || sandboxStore.state || {};
+  // Seed a visible blank project if empty to avoid black screen
+  useEffect(() => {
+    const s = getStateSafe();
+    if (!s || !s.background || !Array.isArray(s.cards)) {
+      const blank = {
+        schemaVersion: 2,
+        background: { type: "one", colors: ["#111111"], direction: "to right", ratio: 50 },
+        cards: [],
+      };
+      projectStore.hydrate?.(blank) ?? projectStore.load?.(blank);
+    }
+  }, []);
 
-  const handleUpload = async (file) => {
-    setError("");
+  // HUD
+  const sessionId = useMemo(() => makeSessionId(), []);
+  const logger = useMemo(() => createLogger({ sessionId }), [sessionId]);
+  const [hudOpen, setHudOpen] = useState(true);
+
+  const onScreenshot = async () => {
+    const node = document.querySelector("#root") || document.body;
+    const dataUrl = await captureScreenshot(node, 2);
+    downloadDataUrl(dataUrl, `${sessionId}-playground-2x.png`);
+    logger.push("artifact.screenshot", { scale: 2, bytes: dataUrl.length });
+  };
+  const onExport = async () => {
     try {
-      const text = await file.text();
-      const json = JSON.parse(text);
-
-      // In-memory migrate + hydrate only
-      const migrated = sandboxStore.migrate ? sandboxStore.migrate(json) : json;
-      if (sandboxStore.hydrate) sandboxStore.hydrate(migrated);
-      else if (sandboxStore.load) sandboxStore.load(migrated);
-
-      setProjectName(file.name);
-      setLoaded(true);
-      setSidebarOpen(true); // open so FormPanel is visible after load
-    } catch {
-      setError("Invalid JSON. Please select a valid project file.");
+      logger.push(EVENT.EXPORT_START, {});
+      await onScreenshot();
+      logger.push(EVENT.EXPORT_SUCCESS, {});
+    } catch (e) {
+      logger.push(EVENT.EXPORT_FAIL, { message: String(e) });
+      alert("Export failed. See logs.");
     }
   };
 
-  const handleExit = () => {
-    try { sandboxStore.hydrate?.({}); } catch {}
-    window.location.href = "/";
+  // Import flow
+  const fileRef = useRef(null);
+  const handleImport = async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const migrated = projectStore.migrate ? projectStore.migrate(json) : json;
+      const normalized = normalizeProject(migrated, REGISTRY); // ensure cards/background
+      projectStore.hydrate?.(normalized) ?? projectStore.load?.(normalized);
+      logger.push(EVENT.PROJECT_LOAD, { source: "upload", name: file.name });
+    } catch (e) {
+      logger.push(EVENT.ERROR, { where: "playground.import", message: String(e) });
+      alert("Invalid or unsupported project JSON.");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
-
   const handleRestart = () => {
-    setLoaded(false);
-    setProjectName("");
-    setError("");
-    try { sandboxStore.hydrate?.({}); } catch {}
-    setSidebarOpen(true);
+    const blank = {
+      schemaVersion: 2,
+      background: { type: "one", colors: ["#111111"], direction: "to right", ratio: 50 },
+      cards: [],
+    };
+    projectStore.hydrate?.(blank) ?? projectStore.load?.(blank);
   };
-
-  const state = getState();
+  const handleExit = () => {
+    try { window.onbeforeunload = null; } catch {}
+    window.location.replace("/"); // Landing
+  };
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        display: "grid",
-        gridTemplateColumns: `${sidebarOpen ? 320 : 44}px 1fr`,
-        background: "#111",
-        color: "#e5e7eb",
-      }}
-    >
-      {/* Sidebar */}
-      <div style={{ borderRight: "1px solid #2a2a2a", position: "relative" }}>
-        {/* Collapse / expand */}
-        <button
-          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          onClick={() => setSidebarOpen((v) => !v)}
-          style={{
-            position: "absolute",
-            top: 8,
-            right: sidebarOpen ? 8 : 6,
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            border: "1px solid #2a2a2a",
-            background: "#1c1c1c",
-            color: "#e5e7eb",
-            cursor: "pointer",
-          }}
-          title={sidebarOpen ? "Collapse" : "Expand"}
-        >
-          {sidebarOpen ? "«" : "»"}
+    <>
+      <Home />
+      <Toolbar onExit={handleExit} onRestart={handleRestart} onPick={() => fileRef.current?.click()} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json"
+        style={{ display: "none" }}
+        onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])}
+      />
+      <HudToggle open={hudOpen} onToggle={() => setHudOpen((v) => !v)} />
+      {hudOpen && (
+        <DebugHUD
+          sessionId={sessionId}
+          logger={logger}
+          metrics={{ fps: 0, zoom: 1, pan: { x: 0, y: 0 } }}
+          onScreenshot={onScreenshot}
+          onExport={onExport}
+        />
+      )}
+    </>
+  );
+}
+
+/* ---------- helpers ---------- */
+function getStateSafe() {
+  try {
+    return projectStore.getState ? projectStore.getState() : projectStore.state;
+  } catch {
+    return {};
+  }
+}
+
+function normalizeProject(input, registry) {
+  const out = { ...input };
+  if (!out.schemaVersion || out.schemaVersion < 2) out.schemaVersion = 2;
+
+  // background normalization
+  if (!out.background) out.background = {};
+  if (out.background.color && !out.background.type) {
+    out.background = { type: "one", colors: [out.background.color], direction: "to right", ratio: 50 };
+  }
+  if (!out.background.type) out.background.type = "one";
+  if (!Array.isArray(out.background.colors)) out.background.colors = [out.background.colors || "#111111"];
+  if (typeof out.background.direction !== "string") out.background.direction = "to right";
+  if (typeof out.background.ratio !== "number") out.background.ratio = 50;
+
+  // cards normalization + aliasing
+  const keys = Object.keys(registry || {});
+  const firstKey = keys[0] || "menucard";
+  const has = (k) => keys.includes(k);
+  const alias = (t) => {
+    const raw = String(t || "").trim();
+    const lc = raw.toLowerCase().replace(/\s+/g, "");
+    const map = {
+      menucard: "menucard", menu: "menucard", "menu-card": "menucard",
+      mealcard: "mealcard", meal: "mealcard", "meal-card": "mealcard",
+      pizzacard: "pizzacard", pizza: "pizzacard", "pizza-card": "pizzacard",
+    };
+    const guess = map[lc] || lc || firstKey;
+    return has(guess) ? guess : firstKey;
+  };
+
+  let cards = Array.isArray(out.cards) ? out.cards : [];
+  if (!cards.length && Array.isArray(out.sections)) {
+    cards = out.sections.map((s, i) => ({
+      id: s.id || `sec_${i + 1}`,
+      type: alias(s.type || firstKey),
+      x: s.x ?? (i % 2 === 0 ? 5 : 52),
+      y: s.y ?? (i < 2 ? 5 : 48),
+      w: s.w ?? 43,
+      h: s.h ?? 40,
+      title: s.title ?? s.name ?? "Untitled",
+      body: s.body ?? "",
+      price: s.price ?? "",
+      font: s.font ?? "Poppins",
+      ...s,
+    }));
+  }
+
+  cards = cards.map((c, i) => ({
+    id: c.id || `c_${i + 1}`,
+    type: alias(c.type || firstKey),
+    x: clamp(c.x, 0, 100, 5 + (i % 2) * 47),
+    y: clamp(c.y, 0, 100, 5 + Math.floor(i / 2) * 43),
+    w: clamp(c.w, 5, 100, 43),
+    h: clamp(c.h, 5, 100, 40),
+    title: c.title ?? "",
+    body: c.body ?? "",
+    price: c.price ?? "",
+    font: c.font ?? "Poppins",
+    ...c,
+  }));
+
+  if (!cards.length) {
+    cards = [{
+      id: "c_1",
+      type: has(firstKey) ? firstKey : "menucard",
+      x: 5, y: 5, w: 43, h: 40,
+      title: "Sample",
+      body: "Imported project had no cards; seeded one for preview.",
+      price: "",
+      font: "Poppins",
+    }];
+  }
+
+  out.cards = cards;
+  return out;
+}
+
+function clamp(v, min, max, dflt) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+}
+
+/* ---------- UI bits ---------- */
+function Toolbar({ onExit, onRestart, onPick }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{
+      position: "fixed", top: 10, left: 10, zIndex: 10000,
+      background: "#151515", border: "1px solid #2a2a2a", borderRadius: 10,
+      padding: open ? "10px" : "6px", color: "#e5e7eb", minWidth: open ? 220 : 60,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: open ? 8 : 0 }}>
+        <strong style={{ fontSize: 12 }}>{open ? "Playground (No Save)" : "PG"}</strong>
+        <button title={open ? "Collapse" : "Expand"} onClick={() => setOpen((v) => !v)} style={btnIcon}>
+          {open ? "«" : "»"}
         </button>
-
-        {/* Compact header */}
-        <div style={{ padding: sidebarOpen ? "12px 12px 8px" : "8px 6px", fontSize: 12 }}>
-          {sidebarOpen ? (
-            <strong>Playground (No Save)</strong>
-          ) : (
-            <span title="Playground">PG</span>
-          )}
-        </div>
-
-        {/* Controls */}
-        <div style={{ padding: sidebarOpen ? "0 12px 12px" : "0 4px 8px" }}>
-          {/* Exit / Restart (icons when collapsed) */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <button onClick={handleExit} title="Exit" style={btn(sidebarOpen)}>
-              {sidebarOpen ? "⟵ Exit" : "⟵"}
-            </button>
-            <button onClick={handleRestart} title="Restart" style={btn(sidebarOpen)}>
-              {sidebarOpen ? "Restart" : "↺"}
-            </button>
-          </div>
-
-          {/* Upload (always accessible) */}
-          {!loaded && (
-            <div style={{ display: "grid", gap: 8 }}>
-              {sidebarOpen && <div>1) Import project JSON</div>}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="application/json"
-                onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
-                style={{ width: "100%" }}
-                title="Upload project JSON"
-              />
-              {error && (
-                <div style={{ color: "#f87171", fontSize: 12 }}>{error}</div>
-              )}
-              {sidebarOpen && (
-                <div style={{ fontSize: 11, opacity: 0.75 }}>
-                  • Nothing is saved. Close tab or Exit to leave.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* FormPanel (only when loaded) */}
-          {loaded && sidebarOpen && (
-            <>
-              <div style={{ marginTop: 8, fontWeight: 600, fontSize: 13 }}>
-                Project: <span title={projectName}>{projectName}</span>
-              </div>
-              <div style={{ marginTop: 10, maxHeight: "calc(100vh - 140px)", overflow: "auto" }}>
-                <FormPanel
-                  state={state}
-                  updateBackground={(patch) => sandboxStore.updateBackground?.(patch)}
-                  updateSection={(id, patch) => sandboxStore.updateSection?.(id, patch)}
-                  registry={registry}
-                />
-              </div>
-            </>
-          )}
-        </div>
       </div>
-
-      {/* Canvas area */}
-      <div ref={canvasWrapRef} style={{ position: "relative" }}>
-        {!loaded ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "grid",
-              placeItems: "center",
-              color: "#9ca3af",
-              fontSize: 14,
-            }}
-          >
-            Upload a project JSON to start testing…
+      {open && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onExit} style={btn}>⟵ Exit</button>
+            <button onClick={onRestart} style={btn}>Restart</button>
           </div>
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "grid",
-              placeItems: "center",
-              padding: 12,
-            }}
-          >
-            <div
-              style={{
-                width: wrapperSize.w,
-                height: wrapperSize.h,
-                background: "#0b0b0b",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
-              {/* Use the real PreviewCanvas, inside a stable-sized wrapper */}
-              <PreviewCanvas state={state} registry={registry} />
-            </div>
-          </div>
-        )}
-      </div>
+          <button onClick={onPick} style={btn}>Import Project (JSON)</button>
+        </div>
+      )}
     </div>
   );
 }
 
-// Small helper for consistent buttons
-function btn(expanded) {
-  return {
-    flex: 1,
-    minWidth: expanded ? 0 : 28,
-    padding: expanded ? "6px 10px" : "6px 0",
-    borderRadius: 6,
-    border: "1px solid #2a2a2a",
-    background: "#1c1c1c",
-    color: "#e5e7eb",
-    cursor: "pointer",
-    fontSize: 12,
-  };
+function HudToggle({ open, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      title={open ? "Hide HUD" : "Show HUD"}
+      style={{
+        position: "fixed", top: 10, right: 10, zIndex: 10000,
+        border: "1px solid #2a2a2a", background: "#151515", color: "#e5e7eb",
+        borderRadius: 10, padding: "6px 10px",
+      }}
+    >
+      {open ? "HUD −" : "HUD +" }
+    </button>
+  );
 }
+
+const btn = {
+  padding: "6px 10px",
+  borderRadius: 8,
+  border: "1px solid #2a2a2a",
+  background: "#1d1d1d",
+  color: "#e5e7eb",
+  cursor: "pointer",
+  fontSize: 12,
+};
+const btnIcon = { ...btn, padding: "4px 8px", borderRadius: 6 };
