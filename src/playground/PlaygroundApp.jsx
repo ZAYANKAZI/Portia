@@ -1,176 +1,246 @@
 // File: src/playground/PlaygroundApp.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import LandingPicker from "./LandingPicker.jsx";
-import DebugHUD from "./DebugHUD.jsx";
-import { createLogger } from "./logger.js";
-import { EVENT } from "./types.js";
-import { makeSessionId } from "./useSessionId.js";
-import { captureScreenshot, downloadDataUrl } from "./snapshots.js";
-import { FLAGS } from "./featureFlags.js";
-
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import FormPanel from "../components/FormPanel.jsx";
 import PreviewCanvas from "../components/PreviewCanvas.jsx";
-import * as projectStore from "../utils/projectStore.js";
-import { registry } from "../components/templates/registry.js";
+import * as store from "../utils/projectStore.js";
+import * as RegistryModule from "../components/templates/registry.js";
 
-import baseline from "./baseline.json";
-import stress from "./stress.json";
-import legacy from "./legacy.json";
+// Robust registry resolution (named/default/templates/cards)
+const registry =
+  RegistryModule.registry ||
+  RegistryModule.default ||
+  RegistryModule.templates ||
+  RegistryModule.cards ||
+  RegistryModule;
 
 export default function PlaygroundApp() {
-  const [sessionId] = useState(() => makeSessionId());
-  const logger = useMemo(() => createLogger({ sessionId }), [sessionId]);
-
+  // UI
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [projectName, setProjectName] = useState("");
-  const canvasRef = useRef(null);
+  const [error, setError] = useState("");
 
-  const [metrics, setMetrics] = useState({ fps: 0, zoom: 1, pan: { x: 0, y: 0 } });
+  // File picker
+  const fileRef = useRef(null);
 
-  useEffect(() => {
-    let frames = 0, last = performance.now(), raf;
-    const tick = () => {
-      frames++;
-      const now = performance.now();
-      if (now - last >= 1000) {
-        setMetrics((m) => ({ ...m, fps: frames }));
-        frames = 0; last = now;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+  // Sandbox: disable persistence side-effects
+  const sandboxStore = useMemo(() => {
+    const patched = { ...store };
+    patched.save = () => {};      // no-op
+    patched.persist = () => {};   // no-op
+    return patched;
   }, []);
 
+  // Canvas sizing wrapper to avoid “blank” due to zero height
+  const canvasWrapRef = useRef(null);
+  const [wrapperSize, setWrapperSize] = useState({ w: 1280, h: 720 });
   useEffect(() => {
-    logger.push(EVENT.APP_START, {
-      userAgent: navigator.userAgent,
-      viewport: { w: window.innerWidth, h: window.innerHeight },
-      flags: FLAGS,
+    const el = canvasWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const cr = entry.contentRect;
+      // Give Preview a stable sized area; keep 16:9 if space allows
+      const maxW = Math.max(600, cr.width - 24);
+      const maxH = Math.max(400, cr.height - 24);
+      // Maintain 16:9 letterboxed fit
+      const targetW = Math.min(maxW, (maxH * 16) / 9);
+      const targetH = (targetW * 9) / 16;
+      setWrapperSize({ w: Math.floor(targetW), h: Math.floor(targetH) });
     });
-  }, [logger]);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-  useEffect(() => {
-    if (!projectStore.setState || !projectStore.getState) return;
-    const origSetState = projectStore.setState;
-    projectStore.setState = (updater, reason) => {
-      const before = projectStore.getState?.();
-      const result = origSetState(updater, reason);
-      const after = projectStore.getState?.();
-      logger.push("store.patch", {
-        reason: reason || "unknown",
-        beforeHash: hashJSON(before),
-        afterHash: hashJSON(after),
-      });
-      return result;
-    };
-    return () => { projectStore.setState = origSetState; };
-  }, [logger]);
+  // Helpers
+  const getState = () =>
+    (sandboxStore.getState && sandboxStore.getState()) || sandboxStore.state || {};
 
-  const onOpen = ({ source, project, name }) => {
-    const migrated = projectStore.migrate ? projectStore.migrate(project) : project;
-    if (migrated !== project) {
-      logger.push(EVENT.MIGRATE_RUN, {
-        from: project.schemaVersion ?? "legacy",
-        to: migrated.schemaVersion ?? "unknown",
-      });
-    }
-    projectStore.hydrate ? projectStore.hydrate(migrated) : projectStore.load?.(migrated);
-    setProjectName(name || source);
-    setLoaded(true);
-
+  const handleUpload = async (file) => {
+    setError("");
     try {
-      const recent = JSON.parse(localStorage.getItem("pg.recent") || "[]");
-      recent.unshift({ name: name || source, ts: Date.now(), project: migrated });
-      localStorage.setItem("pg.recent", JSON.stringify(recent.slice(0, 8)));
-    } catch {}
-  };
+      const text = await file.text();
+      const json = JSON.parse(text);
 
-  const onScreenshot = async () => {
-    const node = canvasRef.current;
-    if (!node) return;
-    const dataUrl = await captureScreenshot(node, 2);
-    downloadDataUrl(dataUrl, `${sessionId}-preview-2x.png`);
-    logger.push("artifact.screenshot", { scale: 2, bytes: dataUrl.length });
-  };
+      // In-memory migrate + hydrate only
+      const migrated = sandboxStore.migrate ? sandboxStore.migrate(json) : json;
+      if (sandboxStore.hydrate) sandboxStore.hydrate(migrated);
+      else if (sandboxStore.load) sandboxStore.load(migrated);
 
-  const onExport = async () => {
-    try {
-      logger.push(EVENT.EXPORT_START, {});
-      await onScreenshot(); // replace with real export when available
-      logger.push(EVENT.EXPORT_SUCCESS, {});
-    } catch (e) {
-      logger.push(EVENT.EXPORT_FAIL, { message: String(e) });
-      alert("Export failed. See logs.");
+      setProjectName(file.name);
+      setLoaded(true);
+      setSidebarOpen(true); // open so FormPanel is visible after load
+    } catch {
+      setError("Invalid JSON. Please select a valid project file.");
     }
   };
 
-  const handleViewport = (v) => setMetrics((m) => ({ ...m, ...v }));
+  const handleExit = () => {
+    try { sandboxStore.hydrate?.({}); } catch {}
+    window.location.href = "/";
+  };
 
-  if (!loaded) {
-    const fixtures = [
-      { name: "Baseline", data: baseline },
-      { name: "Stress (Long/RTL)", data: stress },
-      { name: "Legacy (migrate)", data: legacy },
-    ];
-    return <LandingPicker fixtures={fixtures} onOpen={onOpen} logger={logger} />;
-  }
+  const handleRestart = () => {
+    setLoaded(false);
+    setProjectName("");
+    setError("");
+    try { sandboxStore.hydrate?.({}); } catch {}
+    setSidebarOpen(true);
+  };
 
-  const state = projectStore.getState ? projectStore.getState() : projectStore.state;
+  const state = getState();
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100vh" }}>
-      <div style={{ borderRight: "1px solid #eee", overflow: "auto" }}>
-        <div style={{ padding: 12, borderBottom: "1px solid #eee" }}>
-          <strong>Project:</strong> {projectName}
+    <div
+      style={{
+        height: "100vh",
+        display: "grid",
+        gridTemplateColumns: `${sidebarOpen ? 320 : 44}px 1fr`,
+        background: "#111",
+        color: "#e5e7eb",
+      }}
+    >
+      {/* Sidebar */}
+      <div style={{ borderRight: "1px solid #2a2a2a", position: "relative" }}>
+        {/* Collapse / expand */}
+        <button
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          onClick={() => setSidebarOpen((v) => !v)}
+          style={{
+            position: "absolute",
+            top: 8,
+            right: sidebarOpen ? 8 : 6,
+            width: 28,
+            height: 28,
+            borderRadius: 6,
+            border: "1px solid #2a2a2a",
+            background: "#1c1c1c",
+            color: "#e5e7eb",
+            cursor: "pointer",
+          }}
+          title={sidebarOpen ? "Collapse" : "Expand"}
+        >
+          {sidebarOpen ? "«" : "»"}
+        </button>
+
+        {/* Compact header */}
+        <div style={{ padding: sidebarOpen ? "12px 12px 8px" : "8px 6px", fontSize: 12 }}>
+          {sidebarOpen ? (
+            <strong>Playground (No Save)</strong>
+          ) : (
+            <span title="Playground">PG</span>
+          )}
         </div>
-        <FormPanel
-          state={state}
-          updateBackground={(patch) => {
-            logger.push(EVENT.BG_CHANGE, { patch });
-            projectStore.updateBackground?.(patch);
-          }}
-          updateSection={(id, patch) => {
-            logger.push(EVENT.PANEL_CHANGE, { id, patch });
-            projectStore.updateSection?.(id, patch);
-          }}
-          registry={registry}
-        />
+
+        {/* Controls */}
+        <div style={{ padding: sidebarOpen ? "0 12px 12px" : "0 4px 8px" }}>
+          {/* Exit / Restart (icons when collapsed) */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <button onClick={handleExit} title="Exit" style={btn(sidebarOpen)}>
+              {sidebarOpen ? "⟵ Exit" : "⟵"}
+            </button>
+            <button onClick={handleRestart} title="Restart" style={btn(sidebarOpen)}>
+              {sidebarOpen ? "Restart" : "↺"}
+            </button>
+          </div>
+
+          {/* Upload (always accessible) */}
+          {!loaded && (
+            <div style={{ display: "grid", gap: 8 }}>
+              {sidebarOpen && <div>1) Import project JSON</div>}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json"
+                onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])}
+                style={{ width: "100%" }}
+                title="Upload project JSON"
+              />
+              {error && (
+                <div style={{ color: "#f87171", fontSize: 12 }}>{error}</div>
+              )}
+              {sidebarOpen && (
+                <div style={{ fontSize: 11, opacity: 0.75 }}>
+                  • Nothing is saved. Close tab or Exit to leave.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FormPanel (only when loaded) */}
+          {loaded && sidebarOpen && (
+            <>
+              <div style={{ marginTop: 8, fontWeight: 600, fontSize: 13 }}>
+                Project: <span title={projectName}>{projectName}</span>
+              </div>
+              <div style={{ marginTop: 10, maxHeight: "calc(100vh - 140px)", overflow: "auto" }}>
+                <FormPanel
+                  state={state}
+                  updateBackground={(patch) => sandboxStore.updateBackground?.(patch)}
+                  updateSection={(id, patch) => sandboxStore.updateSection?.(id, patch)}
+                  registry={registry}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      <div style={{ position: "relative" }}>
-        <div ref={canvasRef}>
-          <PreviewCanvas
-            state={state}
-            registry={registry}
-            onViewportChange={handleViewport}
-            onInlineOpen={(e) => logger.push(EVENT.INLINE_OPEN, e)}
-            onInlineCommit={(e) => logger.push(EVENT.INLINE_COMMIT, e)}
-            onInlineCancel={(e) => logger.push(EVENT.INLINE_CANCEL, e)}
-            onCardAdd={(e) => logger.push(EVENT.CARD_ADD, e)}
-            onCardRemove={(e) => logger.push(EVENT.CARD_REMOVE, e)}
-            onCardMove={(e) => logger.push(EVENT.CARD_MOVE, e)}
-            onCardResize={(e) => logger.push(EVENT.CARD_RESIZE, e)}
-          />
-        </div>
-
-        <DebugHUD
-          sessionId={sessionId}
-          logger={logger}
-          metrics={metrics}
-          onScreenshot={onScreenshot}
-          onExport={onExport}
-        />
+      {/* Canvas area */}
+      <div ref={canvasWrapRef} style={{ position: "relative" }}>
+        {!loaded ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              color: "#9ca3af",
+              fontSize: 14,
+            }}
+          >
+            Upload a project JSON to start testing…
+          </div>
+        ) : (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              padding: 12,
+            }}
+          >
+            <div
+              style={{
+                width: wrapperSize.w,
+                height: wrapperSize.h,
+                background: "#0b0b0b",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              {/* Use the real PreviewCanvas, inside a stable-sized wrapper */}
+              <PreviewCanvas state={state} registry={registry} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function hashJSON(obj) {
-  try {
-    const s = JSON.stringify(obj);
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    return (h >>> 0).toString(16);
-  } catch { return "0"; }
+// Small helper for consistent buttons
+function btn(expanded) {
+  return {
+    flex: 1,
+    minWidth: expanded ? 0 : 28,
+    padding: expanded ? "6px 10px" : "6px 0",
+    borderRadius: 6,
+    border: "1px solid #2a2a2a",
+    background: "#1c1c1c",
+    color: "#e5e7eb",
+    cursor: "pointer",
+    fontSize: 12,
+  };
 }
